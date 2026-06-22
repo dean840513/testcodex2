@@ -27,7 +27,7 @@ Set these variables in Cloudflare Pages settings. Do not commit secrets or creat
 - `VITE_PRIVY_APP_ID`: public Privy App ID exposed to the browser by Vite.
 - `PRIVY_APP_SECRET`: server-side Privy App Secret for Pages Functions / future token verification. Never expose this value to the frontend.
 
-Privy is configured for Email OTP login only. After login, the frontend calls `POST /api/users/sync` so first-time users are inserted into the `users` table with their Privy `user.id`.
+Privy is configured for Email OTP login only. After login, the frontend calls `POST /api/users/sync` so first-time users are inserted or updated in the `users` table with their Privy `user.id`, email, and nullable wallet address.
 
 ## Run the D1 migration in Cloudflare D1 Console
 
@@ -35,10 +35,10 @@ Privy is configured for Email OTP login only. After login, the frontend calls `P
 2. Go to **Workers & Pages** → **D1 SQL Database**.
 3. Select your database.
 4. Open **Console**.
-5. Copy the full contents of `migrations/0001_initial.sql`.
-6. Paste it into the console and run it.
+5. Run the migration files in order. Start by copying the full contents of `migrations/0001_initial.sql`, then run `migrations/0002_add_user_wallet_fields.sql`.
+6. Paste each migration into the console and run it.
 
-The migration creates `users`, `products`, `orders`, `order_items`, `cellar_items`, and `resale_listings`, then seeds the demo user and sample wine products.
+The migrations create `users`, `products`, `orders`, `order_items`, `cellar_items`, and `resale_listings`, seed the demo user and sample wine products, and add NFT-ready user metadata such as `privy_user_id` and nullable `wallet_address`.
 
 ## Local development
 

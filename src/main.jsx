@@ -33,12 +33,27 @@ function getPrivyEmail(user) {
   return user?.email?.address || user?.linkedAccounts?.find(account => account.type === 'email')?.address || ''
 }
 
+function getPrivyWalletAddress(user) {
+  const linkedAccounts = user?.linkedAccounts || []
+  const directWallets = [user?.wallet, user?.embeddedWallet].filter(Boolean)
+  const wallets = [...directWallets, ...linkedAccounts].filter(account => account?.address)
+  const embeddedWallet = wallets.find(account =>
+    account.type === 'embedded_wallet' ||
+    account.walletClientType === 'privy' ||
+    account.connectorType === 'embedded' ||
+    account.connectorType === 'privy'
+  )
+  const linkedWallet = wallets.find(account => account.type === 'wallet')
+  return embeddedWallet?.address || linkedWallet?.address || null
+}
+
 function AuthenticatedApp() {
   const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy()
   const [syncingUser, setSyncingUser] = useState(false)
   const isAuthed = ready && authenticated
   const userId = user?.id
   const email = getPrivyEmail(user)
+  const walletAddress = getPrivyWalletAddress(user)
   const authApi = async (path, options = {}) => {
     const token = await getAccessToken()
     return api(path, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
@@ -47,9 +62,9 @@ function AuthenticatedApp() {
     if (!ready || !isAuthed || !userId) return
     let alive = true
     setSyncingUser(true)
-    authApi('/api/users/sync', { method: 'POST', body: JSON.stringify({ userId, email }) }).catch(e => alert(e.message)).finally(() => { if (alive) setSyncingUser(false) })
+    authApi('/api/users/sync', { method: 'POST', body: JSON.stringify({ privy_user_id: userId, email, wallet_address: walletAddress }) }).catch(e => alert(e.message)).finally(() => { if (alive) setSyncingUser(false) })
     return () => { alive = false }
-  }, [ready, isAuthed, userId, email])
+  }, [ready, isAuthed, userId, email, walletAddress])
   const [path, nav] = useRoute()
   const route = useMemo(() => {
     const parts = path.split('/').filter(Boolean)
