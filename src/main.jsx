@@ -18,7 +18,7 @@ function useRoute() {
     addEventListener('popstate', onPop)
     return () => removeEventListener('popstate', onPop)
   }, [])
-  const nav = (to) => { history.pushState(null, '', to); setPath(to); scrollTo(0, 0) }
+  const nav = (to) => { history.pushState(null, '', to); setPath(location.pathname); scrollTo(0, 0) }
   return [path, nav]
 }
 
@@ -67,10 +67,11 @@ function Product({ id, nav }) {
   return <section className="detail"><img src={p.image_url} alt={p.name}/><div className="panel"><p className="eyebrow">Estate reserve</p><h1>{p.name}</h1><p>{p.description}</p><h2>{money(p.price_cents)}</h2><p>{p.stock} bottles available</p><label>Quantity<input type="number" min="1" max={p.stock} value={qty} onChange={e=>setQty(e.target.value)} /></label><button className="primary" onClick={()=>nav(`/checkout/${p.id}?qty=${qty}`)}><span>🛍</span> Buy Now</button></div></section>
 }
 function Checkout({ productId, nav }) {
-  const qty = Number(new URLSearchParams(location.search).get('qty') || 1), [p,setP]=useState(null), [busy,setBusy]=useState(false)
-  useEffect(()=>{api(`/api/product?id=${productId}`).then(d=>setP(d.product)).catch(alert)},[productId])
+  const qty = Number(new URLSearchParams(location.search).get('qty') || 1), [p,setP]=useState(null), [loading,setLoading]=useState(true), [notFound,setNotFound]=useState(false), [busy,setBusy]=useState(false)
+  useEffect(()=>{setLoading(true); setNotFound(false); setP(null); api(`/api/product?id=${encodeURIComponent(productId)}`).then(d=>{setP(d.product); setNotFound(!d.product)}).catch(e=>{if(e.message === 'Product not found') setNotFound(true); else alert(e.message)}).finally(()=>setLoading(false))},[productId])
   const create=async()=>{setBusy(true); try{const d=await api('/api/orders/create',{method:'POST',body:JSON.stringify({userId:DEMO_USER.userId, productId, quantity:qty})}); nav(`/payment/${d.order.id}`)}catch(e){alert(e.message)}finally{setBusy(false)}}
-  if(!p) return <p>Loading...</p>
+  if(loading) return <section className="panel narrow"><h1>Checkout</h1><p>Loading product...</p></section>
+  if(notFound || !p) return <section className="panel narrow"><h1>Product not found</h1><p>The selected product could not be found. Please return home and choose another bottle.</p><button className="primary" onClick={()=>nav('/')}>Back Home</button></section>
   return <section className="panel narrow"><h1>Checkout</h1><p>{p.name} × {qty}</p><h2>Total {money(p.price_cents*qty)}</h2><button className="primary" disabled={busy} onClick={create}>Proceed to Payment</button></section>
 }
 function Payment({ orderId, nav }) {
