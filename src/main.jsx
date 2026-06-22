@@ -12,13 +12,14 @@ const api = async (path, options) => {
 }
 
 function useRoute() {
-  const [path, setPath] = useState(location.pathname)
+  const currentPath = () => window.location.pathname || '/'
+  const [path, setPath] = useState(currentPath)
   useEffect(() => {
-    const onPop = () => setPath(location.pathname)
+    const onPop = () => setPath(currentPath())
     addEventListener('popstate', onPop)
     return () => removeEventListener('popstate', onPop)
   }, [])
-  const nav = (to) => { history.pushState(null, '', to); setPath(location.pathname); scrollTo(0, 0) }
+  const nav = (to) => { history.pushState(null, '', to); setPath(currentPath()); scrollTo(0, 0) }
   return [path, nav]
 }
 
@@ -46,8 +47,9 @@ function App() {
       {route.name === 'payment' && <Payment orderId={route.id} nav={nav} />}
       {route.name === 'orders' && <Orders />}
       {route.name === 'cellar' && <Cellar nav={nav} />}
-      {route.name === 'resale' && <Resale />}
+      {route.name === 'resale' && <ResaleMarket />}
       {route.name === 'resell' && <Resell productId={route.id} nav={nav} />}
+      {!['home','product','checkout','payment','orders','cellar','resale','resell'].includes(route.name) && <Home nav={nav} />}
     </main>
   </>
 }
@@ -81,7 +83,7 @@ function Payment({ orderId, nav }) {
 }
 function Orders(){const [orders,setOrders]=useState([]); useEffect(()=>{api(`/api/orders?userId=${DEMO_USER.userId}`).then(d=>setOrders(d.orders)).catch(alert)},[]); return <List title="My Orders" items={orders.map(o=>({title:`#${o.id} ${o.product_name}`, meta:`${o.quantity} · ${money(o.total_cents)} · ${new Date(o.created_at).toLocaleString()}`, badge:o.status}))}/>}
 function Cellar({nav}){const [items,setItems]=useState([]); useEffect(()=>{api(`/api/cellar?userId=${DEMO_USER.userId}`).then(d=>setItems(d.items)).catch(alert)},[]); return <section><h1>My Cellar</h1><div className="list">{items.map(i=><div className="list-item" key={i.id}><div><h3>{i.product_name}</h3><p>{i.quantity} bottles · purchased {new Date(i.purchased_at).toLocaleString()}</p></div><button onClick={()=>nav(`/resell/${i.product_id}`)}><span>↻</span> Resell</button></div>)}</div></section>}
-function Resale(){const [rows,setRows]=useState([]); const load=()=>api('/api/resales').then(d=>setRows(d.listings)).catch(alert); useEffect(load,[]); const buy=async(id)=>{try{await api('/api/resales/buy',{method:'POST',body:JSON.stringify({userId:DEMO_USER.userId, listingId:id, quantity:1})}); load(); alert('Resale purchased and added to cellar.')}catch(e){alert(e.message)}}; return <section><h1>Resale Market</h1><div className="grid">{rows.map(r=><article className="card" key={r.id}><img src={r.image_url}/><h3>{r.product_name}</h3><p>Seller: {r.seller_user_id}</p><p>{r.quantity} available · {money(r.price_cents)} each</p><button className="primary" onClick={()=>buy(r.id)}>Buy Resale</button></article>)}</div></section>}
+function ResaleMarket(){const [rows,setRows]=useState([]),[loading,setLoading]=useState(true); const load=async(active=()=>true)=>{setLoading(true); try{const d=await api('/api/resales'); if(active()) setRows(d.listings || [])}catch(e){if(active()) alert(e.message)}finally{if(active()) setLoading(false)}}; useEffect(()=>{let alive=true; load(()=>alive); return()=>{alive=false}},[]); const buy=async(id)=>{try{await api('/api/resales/buy',{method:'POST',body:JSON.stringify({userId:DEMO_USER.userId, listingId:id, quantity:1})}); await load(); alert('Resale purchased and added to cellar.')}catch(e){alert(e.message)}}; return <section><h1>Resale Market</h1>{loading && <p>Loading resale listings...</p>}<div className="grid">{rows.map(r=><article className="card" key={r.id}><img src={r.image_url} alt={r.product_name}/><h3>{r.product_name}</h3><p>Seller: {r.seller_user_id}</p><p>{r.quantity} available · {money(r.price_cents)} each</p><button className="primary" onClick={()=>buy(r.id)}>Buy Resale</button></article>)}</div></section>}
 function Resell({productId, nav}){const [qty,setQty]=useState(1),[price,setPrice]=useState(100),[available,setAvailable]=useState(0); useEffect(()=>{api(`/api/cellar?userId=${DEMO_USER.userId}`).then(d=>setAvailable(d.items.filter(i=>String(i.product_id)===String(productId)).reduce((a,i)=>a+i.quantity,0))).catch(alert)},[productId]); const submit=async()=>{if(qty>available)return alert('Quantity exceeds cellar balance'); try{await api('/api/resales/create',{method:'POST',body:JSON.stringify({userId:DEMO_USER.userId, productId, quantity:Number(qty), priceCents:Math.round(Number(price)*100)})}); nav('/resale')}catch(e){alert(e.message)}}; return <section className="panel narrow"><h1>Resell Bottles</h1><p>Available: {available}</p><label>Quantity<input type="number" min="1" max={available} value={qty} onChange={e=>setQty(Number(e.target.value))}/></label><label>Price USD<input type="number" min="1" value={price} onChange={e=>setPrice(e.target.value)}/></label><button className="primary" onClick={submit}>List for Resale</button></section>}
 function List({title,items}){return <section><h1>{title}</h1><div className="list">{items.map((i,idx)=><div className="list-item" key={idx}><div><h3>{i.title}</h3><p>{i.meta}</p></div><span className={`badge ${i.badge}`}>{i.badge}</span></div>)}</div></section>}
 
