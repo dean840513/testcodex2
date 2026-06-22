@@ -54,29 +54,38 @@ function AuthenticatedApp() {
     const parts = path.split('/').filter(Boolean)
     return { name: parts[0] || 'home', id: parts[1] }
   }, [path])
+  const [postLoginPath, setPostLoginPath] = useState('')
+  const requireAuth = (nextPath = window.location.pathname) => {
+    setPostLoginPath(nextPath)
+    login()
+  }
+  useEffect(() => {
+    if (!ready || !authenticated || !postLoginPath) return
+    nav(postLoginPath)
+    setPostLoginPath('')
+  }, [ready, authenticated, postLoginPath])
   if (!ready) return <main><section className="panel narrow"><h1>Loading Privy...</h1></section></main>
-  if (!authenticated) return <main><section className="panel narrow"><p className="eyebrow">TATTOO Lifestyle / Wine Marketplace</p><h1>Sign in with Email OTP</h1><p>Use Privy email one-time-passcode login to access orders, cellar, and resale flows.</p><button className="primary" onClick={login}>Login with Email</button></section></main>
   return <>
     <header className="nav">
       <button onClick={() => nav('/')} className="brand"><span>🍷</span> TATTOO <span>Wine Marketplace</span></button>
       <nav>
         <button onClick={() => nav('/')}>Home</button>
-        <button onClick={() => nav('/orders')}>My Orders</button>
-        <button onClick={() => nav('/cellar')}>My Cellar</button>
+        <button onClick={() => authenticated ? nav('/orders') : requireAuth('/orders')}>My Orders</button>
+        <button onClick={() => authenticated ? nav('/cellar') : requireAuth('/cellar')}>My Cellar</button>
         <button onClick={() => nav('/resale')}>Resale Market</button>
-        <button onClick={logout}>Logout</button>
+        {authenticated ? <button onClick={logout}>Logout</button> : <button onClick={() => requireAuth(window.location.pathname)}>Login / Sign up</button>}
       </nav>
     </header>
     <main>
-      <div className="user-pill">Privy login: {email || userId}{syncingUser ? ' · syncing...' : ''}</div>
+      {authenticated && <div className="user-pill">Privy login: {email || userId}{syncingUser ? ' · syncing...' : ''}</div>}
       {route.name === 'home' && <Home nav={nav} />}
-      {route.name === 'product' && <Product id={route.id} nav={nav} />}
-      {route.name === 'checkout' && <Checkout productId={route.id} nav={nav} userId={userId} authApi={authApi} />}
-      {route.name === 'payment' && <Payment orderId={route.id} nav={nav} userId={userId} authApi={authApi} />}
-      {route.name === 'orders' && <Orders userId={userId} authApi={authApi} />}
-      {route.name === 'cellar' && <Cellar nav={nav} userId={userId} authApi={authApi} />}
-      {route.name === 'resale' && <ResaleMarket userId={userId} authApi={authApi} />}
-      {route.name === 'resell' && <Resell productId={route.id} nav={nav} userId={userId} authApi={authApi} />}
+      {route.name === 'product' && <Product id={route.id} nav={nav} authenticated={authenticated} requireAuth={requireAuth} />}
+      {route.name === 'checkout' && (authenticated ? <Checkout productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to checkout" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
+      {route.name === 'payment' && (authenticated ? <Payment orderId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to continue payment" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
+      {route.name === 'orders' && (authenticated ? <Orders userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view orders" login={() => requireAuth('/orders')} />)}
+      {route.name === 'cellar' && (authenticated ? <Cellar nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view your cellar" login={() => requireAuth('/cellar')} />)}
+      {route.name === 'resale' && <ResaleMarket userId={userId} authApi={authApi} authenticated={authenticated} requireAuth={requireAuth} />}
+      {route.name === 'resell' && (authenticated ? <Resell productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to resell bottles" login={() => requireAuth(window.location.pathname)} />)}
       {!['home','product','checkout','payment','orders','cellar','resale','resell'].includes(route.name) && <Home nav={nav} />}
     </main>
   </>
@@ -90,11 +99,12 @@ function Home({ nav }) {
   </article>)}</div></section>
 }
 function Hero(){return <section className="hero"><div><p className="eyebrow">Black-gold wine / Web3 lifestyle testnet</p><h1>Luxury bottles, digital cellar, frictionless resale.</h1><p>Prototype commerce flow for TATTOO Lifestyle collectors with Privy Email OTP and mock Stripe/Web3 flows.</p></div><span className="gem">◆</span></section>}
-function Product({ id, nav }) {
+function LoginRequired({ title, login }) {return <section className="panel narrow"><h1>{title}</h1><p>Please sign in with Privy Email OTP to continue. Public browsing remains available without login.</p><button className="primary" onClick={login}>Login / Sign up</button></section>}
+function Product({ id, nav, authenticated, requireAuth }) {
   const [p, setP] = useState(null), [qty,setQty]=useState(1)
   useEffect(()=>{api(`/api/product?id=${id}`).then(d=>setP(d.product)).catch(alert)},[id])
   if(!p) return <p>Loading...</p>
-  return <section className="detail"><img src={p.image_url} alt={p.name}/><div className="panel"><p className="eyebrow">Estate reserve</p><h1>{p.name}</h1><p>{p.description}</p><h2>{money(p.price_cents)}</h2><p>{p.stock} bottles available</p><label>Quantity<input type="number" min="1" max={p.stock} value={qty} onChange={e=>setQty(e.target.value)} /></label><button className="primary" onClick={()=>nav(`/checkout/${p.id}?qty=${qty}`)}><span>🛍</span> Buy Now</button></div></section>
+  return <section className="detail"><img src={p.image_url} alt={p.name}/><div className="panel"><p className="eyebrow">Estate reserve</p><h1>{p.name}</h1><p>{p.description}</p><h2>{money(p.price_cents)}</h2><p>{p.stock} bottles available</p><label>Quantity<input type="number" min="1" max={p.stock} value={qty} onChange={e=>setQty(e.target.value)} /></label><button className="primary" onClick={()=>authenticated ? nav(`/checkout/${p.id}?qty=${qty}`) : requireAuth(window.location.pathname)}><span>🛍</span> Buy Now</button></div></section>
 }
 function Checkout({ productId, nav, userId, authApi }) {
   const qty = Number(new URLSearchParams(location.search).get('qty') || 1), [p,setP]=useState(null), [loading,setLoading]=useState(true), [notFound,setNotFound]=useState(false), [busy,setBusy]=useState(false)
@@ -111,7 +121,7 @@ function Payment({ orderId, nav, userId, authApi }) {
 }
 function Orders({userId, authApi}){const [orders,setOrders]=useState([]); useEffect(()=>{authApi(`/api/orders?userId=${encodeURIComponent(userId)}`).then(d=>setOrders(d.orders)).catch(alert)},[userId]); return <List title="My Orders" items={orders.map(o=>({title:`#${o.id} ${o.product_name}`, meta:`${o.quantity} · ${money(o.total_cents)} · ${new Date(o.created_at).toLocaleString()}`, badge:o.status}))}/>}
 function Cellar({nav, userId, authApi}){const [items,setItems]=useState([]); useEffect(()=>{authApi(`/api/cellar?userId=${encodeURIComponent(userId)}`).then(d=>setItems(d.items)).catch(alert)},[userId]); return <section><h1>My Cellar</h1><div className="list">{items.map(i=><div className="list-item" key={i.id}><div><h3>{i.product_name}</h3><p>{i.quantity} bottles · purchased {new Date(i.purchased_at).toLocaleString()}</p></div><button onClick={()=>nav(`/resell/${i.product_id}`)}><span>↻</span> Resell</button></div>)}</div></section>}
-function ResaleMarket({userId, authApi}){const [rows,setRows]=useState([]),[loading,setLoading]=useState(true); const load=async(active=()=>true)=>{setLoading(true); try{const d=await api('/api/resales'); if(active()) setRows(d.listings || [])}catch(e){if(active()) alert(e.message)}finally{if(active()) setLoading(false)}}; useEffect(()=>{let alive=true; load(()=>alive); return()=>{alive=false}},[]); const buy=async(id)=>{try{await authApi('/api/resales/buy',{method:'POST',body:JSON.stringify({userId, listingId:id, quantity:1})}); await load(); alert('Resale purchased and added to cellar.')}catch(e){alert(e.message)}}; return <section><h1>Resale Market</h1>{loading && <p>Loading resale listings...</p>}<div className="grid">{rows.map(r=><article className="card" key={r.id}><img src={r.image_url} alt={r.product_name}/><h3>{r.product_name}</h3><p>Seller: {r.seller_user_id}</p><p>{r.quantity} available · {money(r.price_cents)} each</p><button className="primary" onClick={()=>buy(r.id)}>Buy Resale</button></article>)}</div></section>}
+function ResaleMarket({userId, authApi, authenticated, requireAuth}){const [rows,setRows]=useState([]),[loading,setLoading]=useState(true); const load=async(active=()=>true)=>{setLoading(true); try{const d=await api('/api/resales'); if(active()) setRows(d.listings || [])}catch(e){if(active()) alert(e.message)}finally{if(active()) setLoading(false)}}; useEffect(()=>{let alive=true; load(()=>alive); return()=>{alive=false}},[]); const buy=async(id)=>{if(!authenticated) return requireAuth('/resale'); try{await authApi('/api/resales/buy',{method:'POST',body:JSON.stringify({userId, listingId:id, quantity:1})}); await load(); alert('Resale purchased and added to cellar.')}catch(e){alert(e.message)}}; return <section><h1>Resale Market</h1>{loading && <p>Loading resale listings...</p>}<div className="grid">{rows.map(r=><article className="card" key={r.id}><img src={r.image_url} alt={r.product_name}/><h3>{r.product_name}</h3><p>Seller: {r.seller_user_id}</p><p>{r.quantity} available · {money(r.price_cents)} each</p><button className="primary" onClick={()=>buy(r.id)}>Buy Resale</button></article>)}</div></section>}
 function Resell({productId, nav, userId, authApi}){const [qty,setQty]=useState(1),[price,setPrice]=useState(100),[available,setAvailable]=useState(0); useEffect(()=>{authApi(`/api/cellar?userId=${encodeURIComponent(userId)}`).then(d=>setAvailable(d.items.filter(i=>String(i.product_id)===String(productId)).reduce((a,i)=>a+i.quantity,0))).catch(alert)},[productId]); const submit=async()=>{if(qty>available)return alert('Quantity exceeds cellar balance'); try{await authApi('/api/resales/create',{method:'POST',body:JSON.stringify({userId, productId, quantity:Number(qty), priceCents:Math.round(Number(price)*100)})}); nav('/resale')}catch(e){alert(e.message)}}; return <section className="panel narrow"><h1>Resell Bottles</h1><p>Available: {available}</p><label>Quantity<input type="number" min="1" max={available} value={qty} onChange={e=>setQty(Number(e.target.value))}/></label><label>Price USD<input type="number" min="1" value={price} onChange={e=>setPrice(e.target.value)}/></label><button className="primary" onClick={submit}>List for Resale</button></section>}
 function List({title,items}){return <section><h1>{title}</h1><div className="list">{items.map((i,idx)=><div className="list-item" key={idx}><div><h3>{i.title}</h3><p>{i.meta}</p></div><span className={`badge ${i.badge}`}>{i.badge}</span></div>)}</div></section>}
 

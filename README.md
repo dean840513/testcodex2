@@ -69,7 +69,7 @@ The static production bundle is emitted to `dist`.
 
 ## Authentication
 
-Users sign in with Privy Email OTP. Orders, cellar entries, and resale activity use the authenticated Privy `user.id`.
+Visitors can browse the home page, product details, and resale market without logging in. Privy Email OTP is requested only for protected areas and purchase actions such as My Orders, My Cellar, Checkout, Payment, Buy Now, and Buy Resale. Orders, cellar entries, and resale activity use the authenticated Privy `user.id`.
 
 ## Implemented flows
 
