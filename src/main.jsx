@@ -36,6 +36,7 @@ function getPrivyEmail(user) {
 function AuthenticatedApp() {
   const { ready, authenticated, user, login, logout, getAccessToken } = usePrivy()
   const [syncingUser, setSyncingUser] = useState(false)
+  const isAuthed = ready && authenticated
   const userId = user?.id
   const email = getPrivyEmail(user)
   const authApi = async (path, options = {}) => {
@@ -43,12 +44,12 @@ function AuthenticatedApp() {
     return api(path, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
   }
   useEffect(() => {
-    if (!ready || !authenticated || !userId) return
+    if (!ready || !isAuthed || !userId) return
     let alive = true
     setSyncingUser(true)
     authApi('/api/users/sync', { method: 'POST', body: JSON.stringify({ userId, email }) }).catch(e => alert(e.message)).finally(() => { if (alive) setSyncingUser(false) })
     return () => { alive = false }
-  }, [ready, authenticated, userId, email])
+  }, [ready, isAuthed, userId, email])
   const [path, nav] = useRoute()
   const route = useMemo(() => {
     const parts = path.split('/').filter(Boolean)
@@ -57,35 +58,38 @@ function AuthenticatedApp() {
   const [postLoginPath, setPostLoginPath] = useState('')
   const requireAuth = (nextPath = window.location.pathname) => {
     setPostLoginPath(nextPath)
-    login()
+    if (ready && !isAuthed) login()
   }
   useEffect(() => {
-    if (!ready || !authenticated || !postLoginPath) return
-    nav(postLoginPath)
-    setPostLoginPath('')
-  }, [ready, authenticated, postLoginPath])
-  if (!ready) return <main><section className="panel narrow"><h1>Loading Privy...</h1></section></main>
+    if (!ready || !postLoginPath) return
+    if (isAuthed) {
+      nav(postLoginPath)
+      setPostLoginPath('')
+    } else {
+      login()
+    }
+  }, [ready, isAuthed, postLoginPath])
   return <>
     <header className="nav">
       <button onClick={() => nav('/')} className="brand"><span>🍷</span> TATTOO <span>Wine Marketplace</span></button>
       <nav>
         <button onClick={() => nav('/')}>Home</button>
-        <button onClick={() => authenticated ? nav('/orders') : requireAuth('/orders')}>My Orders</button>
-        <button onClick={() => authenticated ? nav('/cellar') : requireAuth('/cellar')}>My Cellar</button>
+        <button onClick={() => isAuthed ? nav('/orders') : requireAuth('/orders')}>My Orders</button>
+        <button onClick={() => isAuthed ? nav('/cellar') : requireAuth('/cellar')}>My Cellar</button>
         <button onClick={() => nav('/resale')}>Resale Market</button>
-        {authenticated ? <button onClick={logout}>Logout</button> : <button onClick={() => requireAuth(window.location.pathname)}>Login / Sign up</button>}
+        {isAuthed ? <button onClick={logout}>Logout</button> : <button onClick={() => requireAuth(window.location.pathname)}>Login / Sign up</button>}
       </nav>
     </header>
     <main>
-      {authenticated && <div className="user-pill">Privy login: {email || userId}{syncingUser ? ' · syncing...' : ''}</div>}
+      {isAuthed && <div className="user-pill">Privy login: {email || userId}{syncingUser ? ' · syncing...' : ''}</div>}
       {route.name === 'home' && <Home nav={nav} />}
-      {route.name === 'product' && <Product id={route.id} nav={nav} authenticated={authenticated} requireAuth={requireAuth} />}
-      {route.name === 'checkout' && (authenticated ? <Checkout productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to checkout" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
-      {route.name === 'payment' && (authenticated ? <Payment orderId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to continue payment" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
-      {route.name === 'orders' && (authenticated ? <Orders userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view orders" login={() => requireAuth('/orders')} />)}
-      {route.name === 'cellar' && (authenticated ? <Cellar nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view your cellar" login={() => requireAuth('/cellar')} />)}
-      {route.name === 'resale' && <ResaleMarket userId={userId} authApi={authApi} authenticated={authenticated} requireAuth={requireAuth} />}
-      {route.name === 'resell' && (authenticated ? <Resell productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to resell bottles" login={() => requireAuth(window.location.pathname)} />)}
+      {route.name === 'product' && <Product id={route.id} nav={nav} authenticated={isAuthed} requireAuth={requireAuth} />}
+      {route.name === 'checkout' && (isAuthed ? <Checkout productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to checkout" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
+      {route.name === 'payment' && (isAuthed ? <Payment orderId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to continue payment" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
+      {route.name === 'orders' && (isAuthed ? <Orders userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view orders" login={() => requireAuth('/orders')} />)}
+      {route.name === 'cellar' && (isAuthed ? <Cellar nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view your cellar" login={() => requireAuth('/cellar')} />)}
+      {route.name === 'resale' && <ResaleMarket userId={userId} authApi={authApi} authenticated={isAuthed} requireAuth={requireAuth} />}
+      {route.name === 'resell' && (isAuthed ? <Resell productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to resell bottles" login={() => requireAuth(window.location.pathname)} />)}
       {!['home','product','checkout','payment','orders','cellar','resale','resell'].includes(route.name) && <Home nav={nav} />}
     </main>
   </>
