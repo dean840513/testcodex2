@@ -1,0 +1,2 @@
+import { json, fail } from './_utils.js'
+export async function onRequestGet({ request, env }) { try { const userId = new URL(request.url).searchParams.get('userId'); const { results } = await env.DB.prepare('SELECT o.*, p.name AS product_name, oi.quantity FROM orders o JOIN order_items oi ON oi.order_id=o.id JOIN products p ON p.id=oi.product_id WHERE o.user_id=? ORDER BY o.created_at DESC').bind(userId).all(); return json({ orders: results }) } catch (e) { return fail(e) } }
