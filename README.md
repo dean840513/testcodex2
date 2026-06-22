@@ -1,6 +1,6 @@
 # TATTOO Lifestyle / Wine Marketplace Test
 
-A React + Vite luxury wine and Web3 lifestyle marketplace prototype for Cloudflare Pages. The app uses mock login, mock Stripe-style payment, Cloudflare Pages Functions APIs, and Cloudflare D1.
+A React + Vite luxury wine and Web3 lifestyle marketplace prototype for Cloudflare Pages. The app uses Privy Email OTP login, mock Stripe-style payment, Cloudflare Pages Functions APIs, and Cloudflare D1.
 
 ## Cloudflare Pages build settings
 
@@ -19,6 +19,15 @@ Create a Cloudflare D1 database and add a Pages Functions binding:
 - **Resource:** your D1 database
 
 The Pages Functions in `functions/api` expect `env.DB` to be available.
+
+## Privy environment variables
+
+Set these variables in Cloudflare Pages settings. Do not commit secrets or create a `.env` file.
+
+- `VITE_PRIVY_APP_ID`: public Privy App ID exposed to the browser by Vite.
+- `PRIVY_APP_SECRET`: server-side Privy App Secret for Pages Functions / future token verification. Never expose this value to the frontend.
+
+Privy is configured for Email OTP login only. After login, the frontend calls `POST /api/users/sync` so first-time users are inserted into the `users` table with their Privy `user.id`.
 
 ## Run the D1 migration in Cloudflare D1 Console
 
@@ -58,10 +67,9 @@ The static production bundle is emitted to `dist`.
 6. Run `migrations/0001_initial.sql` in the D1 Console.
 7. Deploy via Cloudflare Pages.
 
-## Demo account
+## Authentication
 
-- `userId`: `demo-user`
-- `email`: `demo@tattoo.test`
+Users sign in with Privy Email OTP. Orders, cellar entries, and resale activity use the authenticated Privy `user.id`.
 
 ## Implemented flows
 
