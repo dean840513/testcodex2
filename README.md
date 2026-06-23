@@ -1,6 +1,6 @@
 # TATTOO Lifestyle / Wine Marketplace Test
 
-A React + Vite luxury wine and Web3 lifestyle marketplace prototype for Cloudflare Pages. The app uses Privy Email OTP login, mock Stripe-style payment, Cloudflare Pages Functions APIs, and Cloudflare D1.
+A React + Vite luxury wine and Web3 lifestyle marketplace prototype for Cloudflare Pages. The app uses Privy Email OTP login, Stripe Checkout test mode payments, Cloudflare Pages Functions APIs, and Cloudflare D1.
 
 ## Cloudflare Pages build settings
 
@@ -26,6 +26,8 @@ Set these variables in Cloudflare Pages settings. Do not commit secrets or creat
 
 - `VITE_PRIVY_APP_ID`: public Privy App ID exposed to the browser by Vite.
 - `PRIVY_APP_SECRET`: server-side Privy App Secret for Pages Functions / future token verification. Never expose this value to the frontend.
+- `STRIPE_SECRET_KEY`: server-side Stripe test mode secret key for Pages Functions only. Never expose this value to the frontend.
+- `VITE_STRIPE_PUBLISHABLE_KEY`: public Stripe publishable key for frontend Stripe features if needed.
 
 Privy is configured for Email OTP login only. After login, the frontend calls `POST /api/users/sync` so first-time users are inserted or updated in the `users` table with their Privy `user.id`, email, and nullable wallet address.
 
@@ -75,7 +77,7 @@ Visitors can browse the home page, product details, and resale market immediatel
 
 - Product listing and product details
 - Checkout and pending order creation
-- Mock Stripe-style payment
+- Stripe Checkout test mode payment
 - Paid order status update, inventory deduction, and cellar write
 - My Orders with pending/paid states
 - My Cellar with resale entry points

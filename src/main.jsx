@@ -100,12 +100,13 @@ function AuthenticatedApp() {
       {route.name === 'home' && <Home nav={nav} />}
       {route.name === 'product' && <Product id={route.id} nav={nav} authenticated={isAuthed} requireAuth={requireAuth} />}
       {route.name === 'checkout' && (isAuthed ? <Checkout productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to checkout" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
-      {route.name === 'payment' && (isAuthed ? <Payment orderId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to continue payment" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
+      {route.name === 'payment-success' && <PaymentSuccess nav={nav} />}
+      {route.name === 'payment-cancel' && <PaymentCancel nav={nav} />}
       {route.name === 'orders' && (isAuthed ? <Orders userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view orders" login={() => requireAuth('/orders')} />)}
       {route.name === 'cellar' && (isAuthed ? <Cellar nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view your cellar" login={() => requireAuth('/cellar')} />)}
       {route.name === 'resale' && <ResaleMarket userId={userId} authApi={authApi} authenticated={isAuthed} requireAuth={requireAuth} />}
       {route.name === 'resell' && (isAuthed ? <Resell productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to resell bottles" login={() => requireAuth(window.location.pathname)} />)}
-      {!['home','product','checkout','payment','orders','cellar','resale','resell'].includes(route.name) && <Home nav={nav} />}
+      {!['home','product','checkout','payment-success','payment-cancel','orders','cellar','resale','resell'].includes(route.name) && <Home nav={nav} />}
     </main>
   </>
 }
@@ -117,7 +118,7 @@ function Home({ nav }) {
     <img src={p.image_url} alt={p.name} /><div><p className="eyebrow">Limited allocation</p><h3>{p.name}</h3><p>{p.description}</p><div className="row"><b>{money(p.price_cents)}</b><span>{p.stock} in stock</span></div></div>
   </article>)}</div></section>
 }
-function Hero(){return <section className="hero"><div><p className="eyebrow">Black-gold wine / Web3 lifestyle testnet</p><h1>Luxury bottles, digital cellar, frictionless resale.</h1><p>Prototype commerce flow for TATTOO Lifestyle collectors with Privy Email OTP and mock Stripe/Web3 flows.</p></div><span className="gem">◆</span></section>}
+function Hero(){return <section className="hero"><div><p className="eyebrow">Black-gold wine / Web3 lifestyle testnet</p><h1>Luxury bottles, digital cellar, frictionless resale.</h1><p>Prototype commerce flow for TATTOO Lifestyle collectors with Privy Email OTP, Stripe Checkout test mode, and mock Web3 flows.</p></div><span className="gem">◆</span></section>}
 function LoginRequired({ title, login }) {return <section className="panel narrow"><h1>{title}</h1><p>Please sign in with Privy Email OTP to continue. Public browsing remains available without login.</p><button className="primary" onClick={login}>Login / Sign up</button></section>}
 function Product({ id, nav, authenticated, requireAuth }) {
   const [p, setP] = useState(null), [qty,setQty]=useState(1)
@@ -128,16 +129,17 @@ function Product({ id, nav, authenticated, requireAuth }) {
 function Checkout({ productId, nav, userId, authApi }) {
   const qty = Number(new URLSearchParams(location.search).get('qty') || 1), [p,setP]=useState(null), [loading,setLoading]=useState(true), [notFound,setNotFound]=useState(false), [busy,setBusy]=useState(false)
   useEffect(()=>{setLoading(true); setNotFound(false); setP(null); api(`/api/product?id=${encodeURIComponent(productId)}`).then(d=>{setP(d.product); setNotFound(!d.product)}).catch(e=>{if(e.message === 'Product not found') setNotFound(true); else alert(e.message)}).finally(()=>setLoading(false))},[productId])
-  const create=async()=>{setBusy(true); try{const d=await authApi('/api/orders/create',{method:'POST',body:JSON.stringify({userId, productId, quantity:qty})}); nav(`/payment/${d.order.id}`)}catch(e){alert(e.message)}finally{setBusy(false)}}
+  const create=async()=>{setBusy(true); try{const d=await authApi('/api/stripe/create-checkout-session',{method:'POST',body:JSON.stringify({privyUserId:userId, productId, qty, orderType:'primary'})}); window.location.href = d.session.url}catch(e){alert(e.message)}finally{setBusy(false)}}
   if(loading) return <section className="panel narrow"><h1>Checkout</h1><p>Loading product...</p></section>
   if(notFound || !p) return <section className="panel narrow"><h1>Product not found</h1><p>The selected product could not be found. Please return home and choose another bottle.</p><button className="primary" onClick={()=>nav('/')}>Back Home</button></section>
-  return <section className="panel narrow"><h1>Checkout</h1><p>{p.name} × {qty}</p><h2>Total {money(p.price_cents*qty)}</h2><button className="primary" disabled={busy} onClick={create}>Proceed to Payment</button></section>
+  return <section className="panel narrow"><h1>Checkout</h1><p>{p.name} × {qty}</p><h2>Total {money(p.price_cents*qty)}</h2><button className="primary" disabled={busy} onClick={create}>Proceed to Stripe Checkout</button></section>
 }
-function Payment({ orderId, nav, userId, authApi }) {
-  const [busy,setBusy]=useState(false)
-  const pay=async()=>{setBusy(true); try{await authApi('/api/orders/pay',{method:'POST',body:JSON.stringify({userId, orderId})}); nav('/cellar')}catch(e){alert(e.message)}finally{setBusy(false)}}
-  return <section className="panel narrow stripe"><h1>Stripe-style secure payment</h1><input placeholder="4242 4242 4242 4242"/><div className="row"><input placeholder="MM / YY"/><input placeholder="CVC"/></div><input placeholder="Cardholder name"/><button className="primary" disabled={busy} onClick={pay}>Pay Successfully</button></section>
+function PaymentSuccess({ nav }) {
+  const [status,setStatus]=useState('Confirming Stripe payment...')
+  useEffect(()=>{const sessionId=new URLSearchParams(window.location.search).get('session_id'); if(!sessionId){setStatus('Missing Stripe session id.'); return} api('/api/stripe/confirm-session',{method:'POST',body:JSON.stringify({sessionId})}).then(d=>setStatus(d.paid?'Payment successful. Your bottle has been added to your cellar.':`Payment status: ${d.status || 'not paid'}`)).catch(e=>setStatus(e.message))},[])
+  return <section className="panel narrow"><h1>Payment Success</h1><p>{status}</p><div className="row"><button className="primary" onClick={()=>nav('/orders')}>My Orders</button><button className="primary" onClick={()=>nav('/cellar')}>My Cellar</button></div></section>
 }
+function PaymentCancel({ nav }) {return <section className="panel narrow"><h1>Payment canceled</h1><p>Your Stripe test payment was canceled. The order remains pending.</p><button className="primary" onClick={()=>nav('/')}>Back Home</button></section>}
 function Orders({userId, authApi}){const [orders,setOrders]=useState([]); useEffect(()=>{authApi(`/api/orders?userId=${encodeURIComponent(userId)}`).then(d=>setOrders(d.orders)).catch(alert)},[userId]); return <List title="My Orders" items={orders.map(o=>({title:`#${o.id} ${o.product_name}`, meta:`${o.quantity} · ${money(o.total_cents)} · ${new Date(o.created_at).toLocaleString()}`, badge:o.status}))}/>}
 function Cellar({nav, userId, authApi}){const [items,setItems]=useState([]); useEffect(()=>{authApi(`/api/cellar?userId=${encodeURIComponent(userId)}`).then(d=>setItems(d.items)).catch(alert)},[userId]); return <section><h1>My Cellar</h1><div className="list">{items.map(i=><div className="list-item" key={i.id}><div><h3>{i.product_name}</h3><p>{i.quantity} bottles · purchased {new Date(i.purchased_at).toLocaleString()}</p></div><button onClick={()=>nav(`/resell/${i.product_id}`)}><span>↻</span> Resell</button></div>)}</div></section>}
 function ResaleMarket({userId, authApi, authenticated, requireAuth}){const [rows,setRows]=useState([]),[loading,setLoading]=useState(true); const load=async(active=()=>true)=>{setLoading(true); try{const d=await api('/api/resales'); if(active()) setRows(d.listings || [])}catch(e){if(active()) alert(e.message)}finally{if(active()) setLoading(false)}}; useEffect(()=>{let alive=true; load(()=>alive); return()=>{alive=false}},[]); const buy=async(id)=>{if(!authenticated) return requireAuth('/resale'); try{await authApi('/api/resales/buy',{method:'POST',body:JSON.stringify({userId, listingId:id, quantity:1})}); await load(); alert('Resale purchased and added to cellar.')}catch(e){alert(e.message)}}; return <section><h1>Resale Market</h1>{loading && <p>Loading resale listings...</p>}<div className="grid">{rows.map(r=><article className="card" key={r.id}><img src={r.image_url} alt={r.product_name}/><h3>{r.product_name}</h3><p>Seller: {r.seller_user_id}</p><p>{r.quantity} available · {money(r.price_cents)} each</p><button className="primary" onClick={()=>buy(r.id)}>Buy Resale</button></article>)}</div></section>}

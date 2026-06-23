@@ -1,2 +1,9 @@
-import { json, body, fail } from '../_utils.js'
-export async function onRequestPost({ request, env }) { try { const { userId, orderId } = await body(request); const order = await env.DB.prepare('SELECT * FROM orders WHERE id=? AND user_id=?').bind(orderId,userId).first(); if (!order) return json({ error: 'Order not found' }, 404); if (order.status === 'paid') return json({ order }); const item = await env.DB.prepare('SELECT * FROM order_items WHERE order_id=?').bind(orderId).first(); const product = await env.DB.prepare('SELECT * FROM products WHERE id=?').bind(item.product_id).first(); if (product.stock < item.quantity) return json({ error: 'Insufficient stock' }, 400); await env.DB.batch([env.DB.prepare('UPDATE products SET stock=stock-? WHERE id=?').bind(item.quantity,item.product_id), env.DB.prepare('UPDATE orders SET status="paid", paid_at=CURRENT_TIMESTAMP WHERE id=?').bind(orderId), env.DB.prepare('INSERT INTO cellar_items (user_id,product_id,quantity,purchased_at,source) VALUES (?,?,?,?,?)').bind(userId,item.product_id,item.quantity,new Date().toISOString(),'primary')]); return json({ order: { ...order, status: 'paid' } }) } catch (e) { return fail(e) } }
+import { json, fail } from '../_utils.js'
+
+export async function onRequestPost() {
+  try {
+    return json({ error: 'Direct payment simulation is disabled. Use Stripe Checkout and /api/stripe/confirm-session.' }, 410)
+  } catch (e) {
+    return fail(e)
+  }
+}
