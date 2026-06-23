@@ -10,7 +10,9 @@
     "react": "latest",
     "react-dom": "latest",
     "@privy-io/react-auth": "latest",
-    "stripe": "latest"
+    "stripe": "latest",
+    "@stripe/react-stripe-js": "latest",
+    "@stripe/stripe-js": "latest"
   },
   "devDependencies": {}
 }

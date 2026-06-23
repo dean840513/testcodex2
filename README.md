@@ -1,6 +1,6 @@
 # TATTOO Lifestyle / Wine Marketplace Test
 
-A React + Vite luxury wine and Web3 lifestyle marketplace prototype for Cloudflare Pages. The app uses Privy Email OTP login, Stripe Checkout test mode payments, Cloudflare Pages Functions APIs, and Cloudflare D1.
+A React + Vite luxury wine and Web3 lifestyle marketplace prototype for Cloudflare Pages. The app uses Privy Email OTP login, Stripe Payment Element test mode payments, Cloudflare Pages Functions APIs, and Cloudflare D1.
 
 ## Cloudflare Pages build settings
 
@@ -77,7 +77,7 @@ Visitors can browse the home page, product details, and resale market immediatel
 
 - Product listing and product details
 - Checkout and pending order creation
-- Stripe Checkout test mode payment
+- Stripe Payment Element test mode payment
 - Paid order status update, inventory deduction, and cellar write
 - My Orders with pending/paid states
 - My Cellar with resale entry points

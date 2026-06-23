@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
+import { loadStripe } from '@stripe/stripe-js'
+import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
 import './styles.css'
 
 const PRIVY_APP_ID = import.meta.env.VITE_PRIVY_APP_ID
+const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
+const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null
 const money = (cents) => `$${(Number(cents || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 const api = async (path, options = {}) => {
   const res = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } })
@@ -100,13 +104,14 @@ function AuthenticatedApp() {
       {route.name === 'home' && <Home nav={nav} />}
       {route.name === 'product' && <Product id={route.id} nav={nav} authenticated={isAuthed} requireAuth={requireAuth} />}
       {route.name === 'checkout' && (isAuthed ? <Checkout productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to checkout" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
+      {route.name === 'payment' && (isAuthed ? <Payment orderId={route.id} nav={nav} /> : <LoginRequired title="Login to continue payment" login={() => requireAuth(window.location.pathname + window.location.search)} />)}
       {route.name === 'payment-success' && <PaymentSuccess nav={nav} />}
       {route.name === 'payment-cancel' && <PaymentCancel nav={nav} />}
       {route.name === 'orders' && (isAuthed ? <Orders userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view orders" login={() => requireAuth('/orders')} />)}
       {route.name === 'cellar' && (isAuthed ? <Cellar nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to view your cellar" login={() => requireAuth('/cellar')} />)}
       {route.name === 'resale' && <ResaleMarket userId={userId} authApi={authApi} authenticated={isAuthed} requireAuth={requireAuth} />}
       {route.name === 'resell' && (isAuthed ? <Resell productId={route.id} nav={nav} userId={userId} authApi={authApi} /> : <LoginRequired title="Login to resell bottles" login={() => requireAuth(window.location.pathname)} />)}
-      {!['home','product','checkout','payment-success','payment-cancel','orders','cellar','resale','resell'].includes(route.name) && <Home nav={nav} />}
+      {!['home','product','checkout','payment','payment-success','payment-cancel','orders','cellar','resale','resell'].includes(route.name) && <Home nav={nav} />}
     </main>
   </>
 }
@@ -118,7 +123,7 @@ function Home({ nav }) {
     <img src={p.image_url} alt={p.name} /><div><p className="eyebrow">Limited allocation</p><h3>{p.name}</h3><p>{p.description}</p><div className="row"><b>{money(p.price_cents)}</b><span>{p.stock} in stock</span></div></div>
   </article>)}</div></section>
 }
-function Hero(){return <section className="hero"><div><p className="eyebrow">Black-gold wine / Web3 lifestyle testnet</p><h1>Luxury bottles, digital cellar, frictionless resale.</h1><p>Prototype commerce flow for TATTOO Lifestyle collectors with Privy Email OTP, Stripe Checkout test mode, and mock Web3 flows.</p></div><span className="gem">◆</span></section>}
+function Hero(){return <section className="hero"><div><p className="eyebrow">Black-gold wine / Web3 lifestyle testnet</p><h1>Luxury bottles, digital cellar, frictionless resale.</h1><p>Prototype commerce flow for TATTOO Lifestyle collectors with Privy Email OTP, Stripe Payment Element test mode, and mock Web3 flows.</p></div><span className="gem">◆</span></section>}
 function LoginRequired({ title, login }) {return <section className="panel narrow"><h1>{title}</h1><p>Please sign in with Privy Email OTP to continue. Public browsing remains available without login.</p><button className="primary" onClick={login}>Login / Sign up</button></section>}
 function Product({ id, nav, authenticated, requireAuth }) {
   const [p, setP] = useState(null), [qty,setQty]=useState(1)
@@ -129,14 +134,26 @@ function Product({ id, nav, authenticated, requireAuth }) {
 function Checkout({ productId, nav, userId, authApi }) {
   const qty = Number(new URLSearchParams(location.search).get('qty') || 1), [p,setP]=useState(null), [loading,setLoading]=useState(true), [notFound,setNotFound]=useState(false), [busy,setBusy]=useState(false)
   useEffect(()=>{setLoading(true); setNotFound(false); setP(null); api(`/api/product?id=${encodeURIComponent(productId)}`).then(d=>{setP(d.product); setNotFound(!d.product)}).catch(e=>{if(e.message === 'Product not found') setNotFound(true); else alert(e.message)}).finally(()=>setLoading(false))},[productId])
-  const create=async()=>{setBusy(true); try{const d=await authApi('/api/stripe/create-checkout-session',{method:'POST',body:JSON.stringify({privyUserId:userId, productId, qty, orderType:'primary'})}); window.location.href = d.session.url}catch(e){alert(e.message)}finally{setBusy(false)}}
+  const create=async()=>{setBusy(true); try{const d=await authApi('/api/stripe/create-payment-intent',{method:'POST',body:JSON.stringify({privyUserId:userId, productId, qty, orderType:'primary'})}); sessionStorage.setItem(`order-summary-${d.orderId}`, JSON.stringify({name:p.name, qty, total:p.price_cents*qty})); nav(`/payment/${d.orderId}?payment_intent_client_secret=${encodeURIComponent(d.clientSecret)}`)}catch(e){alert(e.message)}finally{setBusy(false)}}
   if(loading) return <section className="panel narrow"><h1>Checkout</h1><p>Loading product...</p></section>
   if(notFound || !p) return <section className="panel narrow"><h1>Product not found</h1><p>The selected product could not be found. Please return home and choose another bottle.</p><button className="primary" onClick={()=>nav('/')}>Back Home</button></section>
-  return <section className="panel narrow"><h1>Checkout</h1><p>{p.name} × {qty}</p><h2>Total {money(p.price_cents*qty)}</h2><button className="primary" disabled={busy} onClick={create}>Proceed to Stripe Checkout</button></section>
+  return <section className="panel narrow"><h1>Checkout</h1><p>{p.name} × {qty}</p><h2>Total {money(p.price_cents*qty)}</h2><button className="primary" disabled={busy} onClick={create}>Proceed to Payment</button></section>
+}
+function Payment({ orderId, nav }) {
+  const clientSecret = new URLSearchParams(window.location.search).get('payment_intent_client_secret')
+  const summary = JSON.parse(sessionStorage.getItem(`order-summary-${orderId}`) || '{}')
+  if (!STRIPE_PUBLISHABLE_KEY || !stripePromise) return <section className="panel narrow"><h1>Stripe is not configured</h1><p>Set VITE_STRIPE_PUBLISHABLE_KEY to render the Payment Element.</p></section>
+  if (!clientSecret) return <section className="panel narrow"><h1>Missing payment details</h1><p>Please return to checkout and start payment again.</p><button className="primary" onClick={()=>nav('/')}>Back Home</button></section>
+  return <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'night', labels: 'floating' } }}><StripePaymentPage orderId={orderId} summary={summary} /></Elements>
+}
+function StripePaymentPage({ orderId, summary }) {
+  const stripe = useStripe(), elements = useElements(), [error,setError]=useState(''), [busy,setBusy]=useState(false)
+  const submit=async(e)=>{e.preventDefault(); if(!stripe||!elements)return; setBusy(true); setError(''); const {error}=await stripe.confirmPayment({elements, confirmParams:{return_url:`${window.location.origin}/payment-success`}}); if(error)setError(error.message || 'Payment failed.'); setBusy(false)}
+  return <section className="payment-layout"><aside className="payment-brand"><p className="eyebrow">TATTOO Secure Payment</p><h1>Complete your cellar allocation.</h1><p>Order #{orderId}</p><h2>{summary.name || 'Wine order'}</h2><p>{summary.qty || 1} bottle(s) · {money(summary.total || 0)}</p></aside><form className="panel payment-element" onSubmit={submit}><h2>Payment details</h2><PaymentElement />{error && <p className="error-text">{error}</p>}<button className="primary" disabled={!stripe || busy}>{busy?'Processing...':'Pay Now'}</button></form></section>
 }
 function PaymentSuccess({ nav }) {
   const [status,setStatus]=useState('Confirming Stripe payment...')
-  useEffect(()=>{const sessionId=new URLSearchParams(window.location.search).get('session_id'); if(!sessionId){setStatus('Missing Stripe session id.'); return} api('/api/stripe/confirm-session',{method:'POST',body:JSON.stringify({sessionId})}).then(d=>setStatus(d.paid?'Payment successful. Your bottle has been added to your cellar.':`Payment status: ${d.status || 'not paid'}`)).catch(e=>setStatus(e.message))},[])
+  useEffect(()=>{const paymentIntentId=new URLSearchParams(window.location.search).get('payment_intent'); if(!paymentIntentId){setStatus('Missing Stripe PaymentIntent id.'); return} api('/api/stripe/confirm-payment',{method:'POST',body:JSON.stringify({paymentIntentId})}).then(d=>setStatus(d.paid?'Payment successful. Your bottle has been added to your cellar.':`Payment status: ${d.status || 'not paid'}`)).catch(e=>setStatus(e.message))},[])
   return <section className="panel narrow"><h1>Payment Success</h1><p>{status}</p><div className="row"><button className="primary" onClick={()=>nav('/orders')}>My Orders</button><button className="primary" onClick={()=>nav('/cellar')}>My Cellar</button></div></section>
 }
 function PaymentCancel({ nav }) {return <section className="panel narrow"><h1>Payment canceled</h1><p>Your Stripe test payment was canceled. The order remains pending.</p><button className="primary" onClick={()=>nav('/')}>Back Home</button></section>}
