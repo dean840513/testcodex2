@@ -92,7 +92,7 @@ function AuthenticatedApp() {
         <button onClick={() => isAuthed ? nav('/orders') : requireAuth('/orders')}>My Orders</button>
         <button onClick={() => isAuthed ? nav('/cellar') : requireAuth('/cellar')}>My Cellar</button>
         <button onClick={() => nav('/resale')}>Resale Market</button>
-        {isAuthed ? <button onClick={logout}>Logout</button> : <button onClick={() => requireAuth(window.location.pathname)}>Login / Sign up</button>}
+        {!ready ? <span className="account-skeleton" aria-label="Account loading" /> : isAuthed ? <button onClick={logout}>Logout</button> : <button onClick={() => requireAuth(window.location.pathname)}>Login / Sign up</button>}
       </nav>
     </header>
     <main>
