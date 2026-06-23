@@ -1,0 +1,18 @@
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "@privy-io/react-auth": "latest",
+    "stripe": "latest",
+    "@stripe/react-stripe-js": "latest",
+    "@stripe/stripe-js": "latest"
+  },
+  "devDependencies": {}
+}
